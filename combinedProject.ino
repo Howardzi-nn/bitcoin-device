@@ -1,21 +1,21 @@
 #include <WiFi.h>
-#include <WiFiClientSecure.h> // Pro zabezpečené HTTPS připojení
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include <ESP32Servo.h> // Použij ESP32Servo místo Servo.h
+#include <ESP32Servo.h>
 #include <Adafruit_SSD1306.h>
 #include <Wire.h>
-#include "secrets.h" // WiFi Configuration (WiFi name and Password)
+#include "secrets.h"
 
 // OLED display settings
-#define SCREEN_WIDTH 128 // OLED display width, in pixels
-#define SCREEN_HEIGHT 64 // OLED display height, in pixels
-#define OLED_RESET    -1 // Reset pin # (or -1 if sharing Arduino reset pin)
-#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+#define OLED_RESET    -1
+#define SCREEN_ADDRESS 0x3C
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // Servo and LED settings
-const int ledPin = 14;    // GPIO14
+const int ledPin = 14;
 const int servoPin = 18;
 Servo servo;
 int servoPos = 0;
@@ -86,13 +86,11 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
 
-  // Fetch FNG data at defined intervals
   if (currentMillis - previousFNGMillis >= fngInterval) {
     previousFNGMillis = currentMillis;
     fetchFNGData();
   }
 
-  // Fetch Bitcoin data at defined intervals
   if (currentMillis - previousBitcoinMillis >= bitcoinInterval) {
     previousBitcoinMillis = currentMillis;
     fetchBitcoinData();
@@ -101,12 +99,11 @@ void loop() {
   // Add any additional non-blocking code here
 }
 
-// Funkce pro získání a zpracování FNG dat
 void fetchFNGData() {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     WiFiClientSecure client;
-    client.setInsecure(); // Not recommended for production
+    client.setInsecure();
 
     String url = "https://" + String(fngHost) + fngPath;
     Serial.print("Connecting to FNG API: ");
@@ -152,15 +149,12 @@ void fetchFNGData() {
         digitalWrite(ledPin, !digitalRead(ledPin));
       }
 
-      // Update OLED with FNG data
       display.setCursor(0, 10);
       display.setTextSize(1);
       display.print("FNG Index: ");
       display.println(value);
       display.display();
 
-      // Optionally, adjust the next FNG interval based on `nextUpdate`
-      // For simplicity, this example uses a fixed interval
     } else {
       Serial.print("FNG GET failed, error: ");
       Serial.println(httpCode);
@@ -171,12 +165,11 @@ void fetchFNGData() {
   }
 }
 
-// Funkce pro získání a zpracování Bitcoin dat
 void fetchBitcoinData() {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     WiFiClientSecure client;
-    client.setInsecure(); // Not recommended for production
+    client.setInsecure();
 
     String url = "https://" + String(bitcoinHost) + bitcoinPath;
     Serial.print("Connecting to Bitcoin API: ");
@@ -209,10 +202,9 @@ void fetchBitcoinData() {
       Serial.print("BTC/USD Price: ");
       Serial.println(BTCUSDPrice);
 
-      // Fetch historical data
       Serial.print("Getting history...");
       String historyUrl = "https://" + String(bitcoinHost) + historyPath;
-      http.end(); // Close previous connection
+      http.end();
       http.begin(client, historyUrl);
       int historyHttpCode = http.GET();
 
@@ -255,7 +247,6 @@ void fetchBitcoinData() {
 
         dayChangeString += String(percentChange, 2) + "%";
 
-        // Display Bitcoin data on OLED
         display.clearDisplay();
         // Header
         display.setTextSize(1);
@@ -283,11 +274,10 @@ void fetchBitcoinData() {
   }
 }
 
-// Pomocná funkce pro centrování textu na OLED displeji
 void printCenter(const String buf, int x, int y) {
   int16_t x1, y1;
   uint16_t w, h;
-  display.getTextBounds(buf, x, y, &x1, &y1, &w, &h); // Calculate width of the string
+  display.getTextBounds(buf, x, y, &x1, &y1, &w, &h);
   display.setCursor((SCREEN_WIDTH - w) / 2, y);
   display.print(buf);
 }
