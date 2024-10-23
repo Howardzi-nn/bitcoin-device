@@ -1,21 +1,20 @@
 #include <WiFi.h>
-#include <WiFiClientSecure.h>
+#include <WiFiClientSecure.h> // For secure HTTPS connection
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include <ESP32Servo.h>
+#include <ESP32Servo.h> // Use ESP32Servo instead of Servo.h
 #include <Adafruit_SSD1306.h>
 #include <Wire.h>
-#include "secrets.h"
+#include "secrets.h" // WiFi Configuration (WiFi name and Password)
 
 // OLED display settings
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET    -1
-#define SCREEN_ADDRESS 0x3C
+#define SCREEN_WIDTH 128 // OLED display width, in pixels
+#define SCREEN_HEIGHT 64 // OLED display height, in pixels
+#define OLED_RESET    -1 // Reset pin # (or -1 if sharing Arduino reset pin)
+#define SCREEN_ADDRESS 0x3C ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-// Servo and LED settings
-const int ledPin = 14;
+const int ledPin = 14;    // GPIO14
 const int servoPin = 18;
 Servo servo;
 int servoPos = 0;
@@ -36,8 +35,13 @@ unsigned long fngInterval = 60000; // 1 minute
 unsigned long previousBitcoinMillis = 0;
 unsigned long bitcoinInterval = 60000; // 1 minute
 
+String fngValue = "";
+String fngClassification = "";
+
+double BTCUSDPrice = 0;
+String dayChangeString = "";
+
 void setup() {
-  // Initialize Serial Monitor
   Serial.begin(115200);
 
   // Initialize OLED display
@@ -74,11 +78,10 @@ void setup() {
   servo.attach(servoPin, 500, 2400); // Attach servo with min and max pulse widths
   servo.write(servoPos);
 
-  // Initialize LED
+  // Initialize LED, not working now
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, HIGH); // Turn LED on initially
 
-  // Initial fetches
   fetchFNGData();
   fetchBitcoinData();
 }
@@ -86,11 +89,13 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
 
+  // Fetch FNG data at defined intervals
   if (currentMillis - previousFNGMillis >= fngInterval) {
     previousFNGMillis = currentMillis;
     fetchFNGData();
   }
 
+  // Fetch Bitcoin data at defined intervals
   if (currentMillis - previousBitcoinMillis >= bitcoinInterval) {
     previousBitcoinMillis = currentMillis;
     fetchBitcoinData();
@@ -99,19 +104,16 @@ void loop() {
   // Add any additional non-blocking code here
 }
 
+// Function to fetch and process FNG data
 void fetchFNGData() {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     WiFiClientSecure client;
-    client.setInsecure();
+    client.setInsecure(); // Not recommended for production
 
     String url = "https://" + String(fngHost) + fngPath;
     Serial.print("Connecting to FNG API: ");
     Serial.println(url);
-    display.setCursor(0, 0);
-    display.setTextSize(1);
-    display.println("Fetching FNG data...");
-    display.display();
 
     http.begin(client, url);
     int httpCode = http.GET();
@@ -128,32 +130,27 @@ void fetchFNGData() {
         return;
       }
 
-      String value = doc["data"][0]["value"];
+      fngValue = doc["data"][0]["value"].as<String>();
+      fngClassification = doc["data"][0]["value_classification"].as<String>();
       String nextUpdate = doc["data"][0]["time_until_update"];
       Serial.print("Fear and Greed Index: ");
-      Serial.println(value);
+      Serial.println(fngValue);
+      Serial.print("Classification: ");
+      Serial.println(fngClassification);
 
-      // Control Servo based on FNG value
-      servoPos = abs((value.toInt() * 1.8) - 180); // Map 0-100 to 0-180
+      servoPos = abs((fngValue.toInt() * 1.8) - 180); // Map 0-100 to 0-180
       servo.write(servoPos);
       Serial.print("Servo Position: ");
       Serial.println(servoPos);
 
-      // Control LED based on FNG value (example logic)
-      if (value.toInt() > 60) { // Greed
+      if (fngValue.toInt() > 60) { // Greed
         digitalWrite(ledPin, HIGH); // Turn LED on
-      } else if (value.toInt() < 40) { // Fear
+      } else if (fngValue.toInt() < 40) { // Fear
         digitalWrite(ledPin, LOW); // Turn LED off
       } else {
         // Medium, toggle LED
         digitalWrite(ledPin, !digitalRead(ledPin));
       }
-
-      display.setCursor(0, 10);
-      display.setTextSize(1);
-      display.print("FNG Index: ");
-      display.println(value);
-      display.display();
 
     } else {
       Serial.print("FNG GET failed, error: ");
@@ -165,19 +162,16 @@ void fetchFNGData() {
   }
 }
 
+// Function to fetch and process Bitcoin data
 void fetchBitcoinData() {
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     WiFiClientSecure client;
-    client.setInsecure();
+    client.setInsecure(); // Not recommended for production
 
     String url = "https://" + String(bitcoinHost) + bitcoinPath;
     Serial.print("Connecting to Bitcoin API: ");
     Serial.println(url);
-    display.setCursor(0, 20);
-    display.setTextSize(1);
-    display.println("Fetching BTC data...");
-    display.display();
 
     http.begin(client, url);
     int httpCode = http.GET();
@@ -197,14 +191,14 @@ void fetchBitcoinData() {
       Serial.print("HTTP Status Code: ");
       Serial.println(httpCode);
 
-      double BTCUSDPrice = doc["bpi"]["USD"]["rate_float"].as<double>();
+      BTCUSDPrice = doc["bpi"]["USD"]["rate_float"].as<double>();
       String lastUpdated = doc["time"]["updated"].as<String>();
       Serial.print("BTC/USD Price: ");
       Serial.println(BTCUSDPrice);
 
       Serial.print("Getting history...");
       String historyUrl = "https://" + String(bitcoinHost) + historyPath;
-      http.end();
+      http.end(); // Close previous connection
       http.begin(client, historyUrl);
       int historyHttpCode = http.GET();
 
@@ -233,31 +227,19 @@ void fetchBitcoinData() {
 
         bool isUp = BTCUSDPrice > yesterdayPrice;
         double percentChange;
-        String dayChangeString = "24hr. Change: ";
 
         if (isUp) {
           percentChange = ((BTCUSDPrice - yesterdayPrice) / yesterdayPrice) * 100;
         } else {
-          percentChange = ((yesterdayPrice - BTCUSDPrice) / yesterdayPrice) * 100;
-          dayChangeString += "-";
+          percentChange = ((BTCUSDPrice - yesterdayPrice) / yesterdayPrice) * 100;
         }
 
         Serial.print("Percent Change: ");
         Serial.println(percentChange);
 
-        dayChangeString += String(percentChange, 2) + "%";
+        dayChangeString = "24hr Change: " + String(percentChange, 2) + "%";
 
-        display.clearDisplay();
-        // Header
-        display.setTextSize(1);
-        printCenter("BTC/USD", 0, 0);
-        // BTC Price
-        display.setTextSize(2);
-        printCenter("$" + String(BTCUSDPrice, 2), 0, 25);
-        // 24hr Change
-        display.setTextSize(1);
-        printCenter(dayChangeString, 0, 55);
-        display.display();
+        updateDisplay();
 
         http.end();
       } else {
@@ -274,10 +256,31 @@ void fetchBitcoinData() {
   }
 }
 
+// Function to update the OLED display with all the data
+void updateDisplay() {
+  display.clearDisplay();
+
+  // FNG Data
+  display.setTextSize(1);
+  String fngDisplayString = "FNG: " + fngValue + " (" + fngClassification + ")";
+  printCenter(fngDisplayString, 0, 0);
+
+  // BTC Price
+  display.setTextSize(2);
+  printCenter("$" + String(BTCUSDPrice, 2), 0, 25);
+
+  // 24hr Change
+  display.setTextSize(1);
+  printCenter(dayChangeString, 0, 55);
+
+  display.display();
+}
+
+// Helper function to center text on the OLED display
 void printCenter(const String buf, int x, int y) {
   int16_t x1, y1;
   uint16_t w, h;
-  display.getTextBounds(buf, x, y, &x1, &y1, &w, &h);
+  display.getTextBounds(buf, x, y, &x1, &y1, &w, &h); // Calculate width of the string
   display.setCursor((SCREEN_WIDTH - w) / 2, y);
   display.print(buf);
 }
