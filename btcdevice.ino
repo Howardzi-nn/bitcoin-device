@@ -19,14 +19,15 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 const int ledPin   = 14;
 const int servoPin = 18;
 Servo servo;
-int servoPos = 0;
+int servoPos = 90;
 
 // API settings
+// https://alternative.me/crypto/api/
 const char* fngHost     = "api.alternative.me";
 const String fngPath    = "/fng/";
 const char* cmcHost     = "pro-api.coinmarketcap.com";
 const String cmcLatestPath    = "/v1/cryptocurrency/quotes/latest?symbol=BTC&convert=USD";
-const String cmcHistoryPath   = "/v1/cryptocurrency/ohlcv/historical?symbol=BTC";
+// const String cmcHistoryPath   = "/v1/cryptocurrency/ohlcv/historical?symbol=BTC&time_period=daily";
 
 // Update intervals
 unsigned long previousFNGMillis     = 0;
@@ -79,6 +80,8 @@ void setup() {
   // Servo, LED
   servo.attach(servoPin, 500, 2400);
   servo.write(servoPos);
+  delay(500);
+  servo.detach();
   pinMode(ledPin, OUTPUT);
   digitalWrite(ledPin, HIGH);
 
@@ -167,27 +170,27 @@ void fetchBitcoinData() {
   mktime(&t);
   strftime(startBuf, 11, "%Y-%m-%d", &t);
 
-  String histUrl = String("https://") + cmcHost
-                 + cmcHistoryPath
-                 + "&time_start=" + startBuf
-                 + "&time_end="   + endBuf
-                 + "&convert=USD";
-  httpH.begin(clientH, histUrl);
-  httpH.addHeader("Accepts", "application/json");
-  httpH.addHeader("X-CMC_PRO_API_KEY", SECRET_CMC_API_KEY);
-  int codeH = httpH.GET();
-  if (codeH == HTTP_CODE_OK) {
-    String pH = httpH.getString();
-    StaticJsonDocument<2000> docH;
-    if (!deserializeJson(docH, pH)) {
-      JsonArray arr = docH["data"]["quotes"].as<JsonArray>();
-      double firstClose = arr[0]["quote"]["USD"]["close"].as<double>();
-      double lastClose  = arr[arr.size()-1]["quote"]["USD"]["close"].as<double>();
-      double pct = (BTCUSDPrice - firstClose) / firstClose * 100.0;
-      dayChangeString = "24h: " + String(pct, 2) + "%";
-    }
-  }
-  httpH.end();
+// String histUrl = String("https://") + cmcHost
+//                + cmcHistoryPath
+//                + "&time_start=" + startBuf
+//                + "&time_end="   + endBuf
+//                + "&convert=USD";
+//   httpH.begin(clientH, histUrl);
+//   httpH.addHeader("Accepts", "application/json");
+//   httpH.addHeader("X-CMC_PRO_API_KEY", SECRET_CMC_API_KEY);
+//   int codeH = httpH.GET();
+//   if (codeH == HTTP_CODE_OK) {
+//     String pH = httpH.getString();  
+//     StaticJsonDocument<2000> docH;
+//     if (!deserializeJson(docH, pH)) {
+//       JsonArray arr = docH["data"]["quotes"].as<JsonArray>();
+//       double firstClose = arr[0]["quote"]["USD"]["close"].as<double>();
+//      double lastClose  = arr[arr.size()-1]["quote"]["USD"]["close"].as<double>();
+//      double pct = (BTCUSDPrice - firstClose) / firstClose * 100.0;
+//      dayChangeString = "24h: " + String(pct, 2) + "%";
+//    }
+//  }
+//  httpH.end();
 
   updateDisplay();
 }
